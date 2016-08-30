@@ -41,6 +41,7 @@ import android.view.ViewConfiguration;
 import android.widget.ImageView;
 
 import org.florescu.android.util.BitmapUtil;
+import org.florescu.android.util.EnumUtil;
 import org.florescu.android.util.PixelUtil;
 
 import java.math.BigDecimal;
@@ -59,6 +60,8 @@ import java.math.BigDecimal;
  * @author Michael Keppler (bananeweizen@gmx.de)
  */
 public class RangeSeekBar<T extends Number> extends ImageView {
+
+    private static final ThumbCrossMode DEFAULT_THUMB_CROSS_MODE = ThumbCrossMode.DISABLED;
     /**
      * Default color of a {@link RangeSeekBar}, #FF33B5E5. This is also known as "Ice Cream Sandwich" blue.
      */
@@ -125,6 +128,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
     private int activeColor;
     private int defaultColor;
     private int textAboveThumbsColor;
+    private ThumbCrossMode thumbCrossMode;
 
     private boolean thumbShadow;
     private int thumbShadowXOffset;
@@ -192,6 +196,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
             thumbShadowYOffset = defaultShadowYOffset;
             thumbShadowBlur = defaultShadowBlur;
             activateOnDefaultValues = false;
+            thumbCrossMode = DEFAULT_THUMB_CROSS_MODE;
         } else {
             TypedArray a = getContext().obtainStyledAttributes(attrs, R.styleable.RangeSeekBar, 0, 0);
             try {
@@ -228,6 +233,13 @@ public class RangeSeekBar<T extends Number> extends ImageView {
                 thumbShadowBlur = a.getDimensionPixelSize(R.styleable.RangeSeekBar_thumbShadowBlur, defaultShadowBlur);
 
                 activateOnDefaultValues = a.getBoolean(R.styleable.RangeSeekBar_activateOnDefaultValues, false);
+
+                thumbCrossMode = EnumUtil.fromInt(
+                        ThumbCrossMode.class,
+                        a.getInt(R.styleable.RangeSeekBar_thumbCrossMode,
+                                DEFAULT_THUMB_CROSS_MODE.ordinal()),
+                        DEFAULT_THUMB_CROSS_MODE
+                );
             } finally {
                 a.recycle();
             }
@@ -289,6 +301,14 @@ public class RangeSeekBar<T extends Number> extends ImageView {
 
     public void setTextAboveThumbsColorResource(@ColorRes int resId) {
         setTextAboveThumbsColor(getResources().getColor(resId));
+    }
+
+    public ThumbCrossMode getThumbCrossMode() {
+        return thumbCrossMode;
+    }
+
+    public void setThumbCrossMode(@NonNull final ThumbCrossMode thumbCrossMode) {
+        this.thumbCrossMode = thumbCrossMode;
     }
 
     @SuppressWarnings("unchecked")
@@ -367,6 +387,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
         } else {
             setNormalizedMinValue(valueToNormalized(value));
         }
+        invalidate();
     }
 
     /**
@@ -390,6 +411,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
         } else {
             setNormalizedMaxValue(valueToNormalized(value));
         }
+        invalidate();
     }
 
     /**
@@ -533,10 +555,37 @@ public class RangeSeekBar<T extends Number> extends ImageView {
         final int pointerIndex = event.findPointerIndex(activePointerId);
         final float x = event.getX(pointerIndex);
 
+        double normalizedValue = screenToNormalized(x);
         if (Thumb.MIN.equals(pressedThumb) && !singleThumb) {
-            setNormalizedMinValue(screenToNormalized(x));
+            if (setNormalizedMinValue(normalizedValue)) {
+                switch (thumbCrossMode) {
+                    case DISABLED:
+                        // Do nothing
+                        break;
+                    case MOVE:
+                        setNormalizedMaxValue(normalizedValue);
+                        break;
+                    case CROSS:
+                        pressedThumb = Thumb.MAX;
+                        break;
+                }
+            }
+            invalidate();
         } else if (Thumb.MAX.equals(pressedThumb)) {
-            setNormalizedMaxValue(screenToNormalized(x));
+            if (setNormalizedMaxValue(normalizedValue)) {
+                switch (thumbCrossMode) {
+                    case DISABLED:
+                        // Do nothing
+                        break;
+                    case MOVE:
+                        setNormalizedMinValue(normalizedValue);
+                        break;
+                    case CROSS:
+                        pressedThumb = Thumb.MIN;
+                        break;
+                }
+            }
+            invalidate();
         }
     }
 
@@ -775,9 +824,9 @@ public class RangeSeekBar<T extends Number> extends ImageView {
      *
      * @param value The new normalized min value to set.
      */
-    private void setNormalizedMinValue(double value) {
+    private boolean setNormalizedMinValue(double value) {
         normalizedMinValue = Math.max(0d, Math.min(1d, Math.min(value, normalizedMaxValue)));
-        invalidate();
+        return Double.compare(value, normalizedMinValue) != 0;
     }
 
     /**
@@ -785,9 +834,9 @@ public class RangeSeekBar<T extends Number> extends ImageView {
      *
      * @param value The new normalized max value to set.
      */
-    private void setNormalizedMaxValue(double value) {
+    private boolean setNormalizedMaxValue(double value) {
         normalizedMaxValue = Math.max(0d, Math.min(1d, Math.max(value, normalizedMinValue)));
-        invalidate();
+        return Double.compare(value, normalizedMaxValue) != 0;
     }
 
     /**
@@ -913,4 +962,23 @@ public class RangeSeekBar<T extends Number> extends ImageView {
         void onRangeSeekBarValuesChanged(RangeSeekBar<T> bar, T minValue, T maxValue);
     }
 
+    public enum ThumbCrossMode {
+
+        /**
+         * Thumb cross disabled, which means you can only drag thumb between seek bar border and
+         * another thumb.
+         */
+        DISABLED,
+
+        /**
+         * When you drag thumb over another one you'll continue with crossed thumb after this
+         * point.
+         */
+        CROSS,
+
+        /**
+         * Thumbs move each other on cross.
+         */
+        MOVE
+    }
 }

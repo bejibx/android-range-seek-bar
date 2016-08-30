@@ -49,6 +49,13 @@
 
         <!-- to activate the thumbs and texts when the min and max values are the default ones (defaults to false) -->
         <attr name="activateOnDefaultValues" format="boolean"/>
+
+        <!-- this specify what should happen when one thumb tries to cross another one, see RangeSeekBar.ThumbCrossMode for each option description-->
+        <attr name="thumbCrossMode" format="enum">
+            <enum name="disabled" value="0" />
+            <enum name="cross" value="1" />
+            <enum name="move" value="2" />
+        </attr>
     </declare-styleable>
 
 </resources>
