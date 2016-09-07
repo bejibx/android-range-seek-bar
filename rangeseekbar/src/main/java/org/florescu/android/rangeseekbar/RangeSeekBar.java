@@ -62,6 +62,7 @@ import java.math.BigDecimal;
 public class RangeSeekBar<T extends Number> extends ImageView {
 
     private static final ThumbCrossMode DEFAULT_THUMB_CROSS_MODE = ThumbCrossMode.DISABLED;
+    private static final boolean DEFAULT_RANGE_DRAG_ENABLED = false;
     /**
      * Default color of a {@link RangeSeekBar}, #FF33B5E5. This is also known as "Ice Cream Sandwich" blue.
      */
@@ -106,6 +107,9 @@ public class RangeSeekBar<T extends Number> extends ImageView {
     private Thumb pressedThumb = null;
     private boolean notifyWhileDragging = false;
     private OnRangeSeekBarChangeListener<T> listener;
+    private float thumbMinOffset;
+    private float thumbMaxOffset;
+    private double rangeLength;
 
     private float downMotionX;
 
@@ -129,6 +133,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
     private int defaultColor;
     private int textAboveThumbsColor;
     private ThumbCrossMode thumbCrossMode;
+    private boolean rangeDragEnabled = DEFAULT_RANGE_DRAG_ENABLED;
 
     private boolean thumbShadow;
     private int thumbShadowXOffset;
@@ -139,7 +144,6 @@ public class RangeSeekBar<T extends Number> extends ImageView {
     private Matrix thumbShadowMatrix = new Matrix();
 
     private boolean activateOnDefaultValues;
-
 
     public RangeSeekBar(Context context) {
         super(context);
@@ -197,6 +201,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
             thumbShadowBlur = defaultShadowBlur;
             activateOnDefaultValues = false;
             thumbCrossMode = DEFAULT_THUMB_CROSS_MODE;
+            rangeDragEnabled = DEFAULT_RANGE_DRAG_ENABLED;
         } else {
             TypedArray a = getContext().obtainStyledAttributes(attrs, R.styleable.RangeSeekBar, 0, 0);
             try {
@@ -240,6 +245,9 @@ public class RangeSeekBar<T extends Number> extends ImageView {
                                 DEFAULT_THUMB_CROSS_MODE.ordinal()),
                         DEFAULT_THUMB_CROSS_MODE
                 );
+
+                rangeDragEnabled = a.getBoolean(R.styleable.RangeSeekBar_rangeDragEnabled,
+                        DEFAULT_RANGE_DRAG_ENABLED);
             } finally {
                 a.recycle();
             }
@@ -309,6 +317,14 @@ public class RangeSeekBar<T extends Number> extends ImageView {
 
     public void setThumbCrossMode(@NonNull final ThumbCrossMode thumbCrossMode) {
         this.thumbCrossMode = thumbCrossMode;
+    }
+
+    public boolean isRangeDragEnabled() {
+        return rangeDragEnabled;
+    }
+
+    public void setRangeDragEnabled(final boolean rangeDragEnabled) {
+        this.rangeDragEnabled = rangeDragEnabled;
     }
 
     @SuppressWarnings("unchecked")
@@ -586,6 +602,21 @@ public class RangeSeekBar<T extends Number> extends ImageView {
                 }
             }
             invalidate();
+        } else if (Thumb.BOTH.equals(pressedThumb)) {
+            setNormalizedRangeValues(x + thumbMinOffset, x + thumbMaxOffset);
+            invalidate();
+        }
+    }
+
+    private void setNormalizedRangeValues(final float thumbMinCoordX, final float thumbMaxCoordX) {
+        setNormalizedMinValue(screenToNormalized(thumbMinCoordX));
+        setNormalizedMaxValue(screenToNormalized(thumbMaxCoordX));
+        if (Double.compare(normalizedMaxValue, rangeLength) < 0) {
+            normalizedMaxValue = rangeLength;
+        }
+        double minValueLimit = normalizedMaxValue - rangeLength;
+        if (Double.compare(normalizedMinValue, minValueLimit) > 0) {
+            normalizedMinValue = minValueLimit;
         }
     }
 
@@ -678,7 +709,8 @@ public class RangeSeekBar<T extends Number> extends ImageView {
             if (thumbShadow) {
                 drawThumbShadow(normalizedToScreen(normalizedMinValue), canvas);
             }
-            drawThumb(normalizedToScreen(normalizedMinValue), Thumb.MIN.equals(pressedThumb), canvas,
+            drawThumb(normalizedToScreen(normalizedMinValue),
+                    Thumb.MIN.equals(pressedThumb) || Thumb.BOTH.equals(pressedThumb), canvas,
                     selectedValuesAreDefault);
         }
 
@@ -686,7 +718,8 @@ public class RangeSeekBar<T extends Number> extends ImageView {
         if (thumbShadow) {
             drawThumbShadow(normalizedToScreen(normalizedMaxValue), canvas);
         }
-        drawThumb(normalizedToScreen(normalizedMaxValue), Thumb.MAX.equals(pressedThumb), canvas,
+        drawThumb(normalizedToScreen(normalizedMaxValue),
+                Thumb.MAX.equals(pressedThumb) || Thumb.BOTH.equals(pressedThumb), canvas,
                 selectedValuesAreDefault);
 
         // draw the text if sliders have moved from default edges
@@ -804,8 +837,18 @@ public class RangeSeekBar<T extends Number> extends ImageView {
             result = Thumb.MIN;
         } else if (maxThumbPressed) {
             result = Thumb.MAX;
+        } else if (rangeDragEnabled && !singleThumb && isBetweenThumbs(touchX)) {
+            thumbMinOffset = normalizedToScreen(normalizedMinValue) - touchX;
+            thumbMaxOffset = normalizedToScreen(normalizedMaxValue) - touchX;
+            rangeLength = normalizedMaxValue - normalizedMinValue;
+            result = Thumb.BOTH;
         }
         return result;
+    }
+
+    private boolean isBetweenThumbs(final float touchX) {
+        return touchX - normalizedToScreen(normalizedMinValue) > thumbHalfWidth &&
+                normalizedToScreen(normalizedMaxValue) - touchX > thumbHalfWidth;
     }
 
     /**
@@ -894,7 +937,7 @@ public class RangeSeekBar<T extends Number> extends ImageView {
      * Thumb constants (min and max).
      */
     private enum Thumb {
-        MIN, MAX
+        MIN, MAX, BOTH
     }
 
     /**

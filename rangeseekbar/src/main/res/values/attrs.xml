@@ -56,6 +56,9 @@
             <enum name="cross" value="1" />
             <enum name="move" value="2" />
         </attr>
+
+        <!-- Whether or not user can drag whole range by touching bar between thumbs. -->
+        <attr name="rangeDragEnabled" format="boolean" />
     </declare-styleable>
 
 </resources>
